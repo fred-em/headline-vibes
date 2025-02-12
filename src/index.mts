@@ -258,84 +258,55 @@ class HeadlineSentimentServer {
       tools: [
         {
           name: 'analyze_headlines',
-          description: 'Analyze sentiment of major news headlines for a given date',
+          description: 'Analyze sentiment of major news headlines using natural language date input',
           inputSchema: {
             type: 'object',
             properties: {
-              date: {
+              input: {
                 type: 'string',
-                description: 'Date in YYYY-MM-DD format',
+                description: 'Date input (e.g., "yesterday", "last Friday", "March 10th", or "2025-02-11")',
               },
             },
-            required: ['date'],
-          },
-        },
-        {
-          name: 'nlp_analyze_headlines',
-          description: 'Analyze sentiment of major news headlines using natural language date query',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              query: {
-                type: 'string',
-                description: 'Natural language date query (e.g., "yesterday", "last Friday", "March 10th")',
-              },
-            },
-            required: ['query'],
+            required: ['input'],
           },
         },
       ],
     }));
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
-      switch (request.params.name) {
-        case 'analyze_headlines': {
-          const { date } = request.params.arguments as { date: string };
-          if (!date?.match(/^\d{4}-\d{2}-\d{2}$/)) {
-            throw new McpError(
-              ErrorCode.InvalidParams,
-              'Invalid date format. Please use YYYY-MM-DD'
-            );
-          }
-
-          const result = await this.analyzeHeadlinesForDate(date);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(result, null, 2),
-              },
-            ],
-          };
-        }
-
-        case 'nlp_analyze_headlines': {
-          const { query } = request.params.arguments as { query: string };
-          if (!query) {
-            throw new McpError(
-              ErrorCode.InvalidParams,
-              'Please provide a date query (e.g., "yesterday", "last Friday")'
-            );
-          }
-
-          const date = this.parseDate(query);
-          const result = await this.analyzeHeadlinesForDate(date);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(result, null, 2),
-              },
-            ],
-          };
-        }
-
-        default:
-          throw new McpError(
-            ErrorCode.MethodNotFound,
-            `Unknown tool: ${request.params.name}`
-          );
+      if (request.params.name !== 'analyze_headlines') {
+        throw new McpError(
+          ErrorCode.MethodNotFound,
+          `Unknown tool: ${request.params.name}`
+        );
       }
+
+      const { input } = request.params.arguments as { input: string };
+      if (!input) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          'Please provide a date input (e.g., "yesterday", "last Friday")'
+        );
+      }
+
+      // First try to parse as exact date format
+      let date: string;
+      if (input.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        date = input;
+      } else {
+        // If not an exact date format, use NLP parsing
+        date = this.parseDate(input);
+      }
+
+      const result = await this.analyzeHeadlinesForDate(date);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
     });
   }
 

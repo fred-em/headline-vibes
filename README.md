@@ -51,43 +51,40 @@ npm run build
 }
 ```
 
-## Available Tools
+## Available Tool
 
-### 1. analyze_headlines
-Analyze sentiment using a specific date in YYYY-MM-DD format.
+### analyze_headlines
+Analyze sentiment using natural language date input or specific dates.
 
 Example usage:
 ```typescript
+// Using natural language
 {
   "name": "analyze_headlines",
   "arguments": {
-    "date": "2025-02-11"
+    "input": "yesterday"
   }
 }
-```
 
-### 2. nlp_analyze_headlines
-Analyze sentiment using natural language date queries.
-
-Example usage:
-```typescript
+// Or using specific dates
 {
-  "name": "nlp_analyze_headlines",
+  "name": "analyze_headlines",
   "arguments": {
-    "query": "yesterday"
+    "input": "2025-02-11"
   }
 }
 ```
 
-Other query examples:
+Input examples:
 - "last Friday"
 - "3 days ago"
 - "March 10th"
 - "two weeks ago"
+- "2025-02-11" (YYYY-MM-DD format also supported)
 
 ## Response Format
 
-Both tools return results in the following format:
+The tool returns results in the following format:
 ```json
 {
   "score": "6.50",              // Normalized sentiment score (0-10)
