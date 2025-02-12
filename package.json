@@ -1,0 +1,36 @@
+{
+  "name": "headline-vibes",
+  "version": "1.0.0",
+  "description": "MCP server for analyzing sentiment of news headlines",
+  "type": "module",
+  "bin": {
+    "headline-vibes": "./build/index.mjs"
+  },
+  "files": [
+    "build"
+  ],
+  "exports": {
+    ".": {
+      "import": "./build/index.mjs",
+      "types": "./build/index.d.ts"
+    }
+  },
+  "scripts": {
+    "prebuild": "mkdir -p build",
+    "build": "tsc --pretty && chmod +x build/index.mjs",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "axios": "^1.7.9",
+    "chrono-node": "^2.7.8",
+    "sentiment": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/axios": "^0.14.0",
+    "@types/node": "^20.11.24",
+    "@types/sentiment": "^5.0.1",
+    "typescript": "^5.3.3"
+  }
+}
