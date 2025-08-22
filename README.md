@@ -51,7 +51,7 @@ npm run build
 }
 ```
 
-## Available Tool
+## Available Tools
 
 ### analyze_headlines
 Analyze sentiment using natural language date input or specific dates.
