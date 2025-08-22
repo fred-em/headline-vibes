@@ -19,10 +19,12 @@
     "prebuild": "mkdir -p build",
     "build": "tsc --pretty && chmod +x build/index.mjs",
     "prepare": "npm run build",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "start:stdio": "TRANSPORT=stdio node ./build/index.mjs",
+    "start:http": "TRANSPORT=http node ./build/index.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.6.0",
+    "@modelcontextprotocol/sdk": "^1.17.3",
     "axios": "^1.7.9",
     "chrono-node": "^2.7.8",
     "sentiment": "^5.0.2"
