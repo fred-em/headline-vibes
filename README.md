@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/fred-em-headline-vibes-badge.png)](https://mseep.ai/app/fred-em-headline-vibes)
+
 # Headline Vibes Analysis MCP Server
 
 A Model Context Protocol server that analyzes sentiment in news headlines from major US publications. The server provides both a standard date-based interface and natural language date parsing for easier use.
