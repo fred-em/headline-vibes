@@ -1,5 +1,7 @@
 # Headline Vibes Analysis MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@fred-em/headline-vibes)](https://smithery.ai/server/@fred-em/headline-vibes)
+
 A Model Context Protocol server that analyzes sentiment in news headlines from major US publications. The server provides both a standard date-based interface and natural language date parsing for easier use.
 
 ## Features
@@ -18,6 +20,15 @@ A Model Context Protocol server that analyzes sentiment in news headlines from m
 
 ## Installation
 
+### Installing via Smithery
+
+To install Headline Vibes Analysis for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@fred-em/headline-vibes):
+
+```bash
+npx -y @smithery/cli install @fred-em/headline-vibes --client claude
+```
+
+### Installing Manually
 1. Clone the repository:
 ```bash
 git clone https://github.com/fred-em/headline-vibes.git
