@@ -2,6 +2,8 @@
 
 A Model Context Protocol server that analyzes sentiment in news headlines from major US publications. The server provides both a standard date-based interface and natural language date parsing for easier use.
 
+<a href="https://glama.ai/mcp/servers/jkojbe4jve"><img width="380" height="200" src="https://glama.ai/mcp/servers/jkojbe4jve/badge" alt="Headline Vibes Analysis Server MCP server" /></a>
+
 ## Features
 
 - Analyzes up to 100 headlines per request
