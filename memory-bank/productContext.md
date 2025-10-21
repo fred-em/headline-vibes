@@ -1,6 +1,6 @@
 # Product Context — Headline Vibes
 
-Last updated: 2025-08-21
+Last updated: 2025-10-21
 
 ## Why This Exists
 
@@ -41,9 +41,9 @@ Decision-makers and LLM agents need a fast, standardized snapshot of market-rele
   - source_distribution and political_distribution
   - sample_headlines_by_leaning (up to 5 per category)
 - Reliability:
-  - Clear error messages for invalid dates, unparseable inputs, and NewsAPI errors
+  - Clear error messages for invalid dates, unparseable inputs, and EventRegistry/API failures
   - Conservative fallbacks: uncategorized sources default to “center”
-  - Pagination with caps to respect rate limits
+  - Token budgeting + rate-limit diagnostics to respect usage caps
 
 ## Example Interactions
 
@@ -65,8 +65,8 @@ Decision-makers and LLM agents need a fast, standardized snapshot of market-rele
 
 - For snapshots of a single day’s headlines, use analyze_headlines
 - For trend-like aggregations across months, use analyze_monthly_headlines
-- For cost control, avoid repeated calls with identical inputs (future: caching may be added)
-- Ensure NEWS_API_KEY is configured in MCP settings
+- For cost control, review token diagnostics before triggering large ranges.
+- Ensure NEWS_API_KEY (EventRegistry) is configured in MCP settings.
 
 ## Out of Scope (Product)
 

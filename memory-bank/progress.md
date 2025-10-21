@@ -1,82 +1,61 @@
 # Progress — Headline Vibes
 
-Last updated: 2025-08-21
+Last updated: 2025-10-21
 
 ## Current Status
 
-- MCP server implemented in TypeScript (ESM) with MCP SDK 0.6.0
+- MCP server upgraded to MCP SDK 1.20 with stdio + HTTP transports
+- EventRegistry (newsapi.ai) client integrated with source URI resolution
 - Tools available:
   - analyze_headlines (daily, natural language or YYYY-MM-DD)
   - analyze_monthly_headlines (range of YYYY-MM months)
-- Dual sentiment scores:
-  - General (sentiment.comparative) normalized to 0–10
-  - Investor (custom weighted lexicon) normalized to 0–10
-- Transparency metrics:
-  - Filtering stats, source distribution, political distribution, sample headlines
-- Memory Bank initialized with core docs
+- Structured outputs returned via MCP `structuredContent` with Zod schemas
+- Dual sentiment scores and investor relevance filtering in production
+- Token budgeting diagnostics and sampling telemetry included in responses
+- Memory Bank refreshed with updated docs
 
 ## What Works
 
 - Natural language date parsing (chrono-node) with strict YYYY-MM-DD fallback
-- Headline fetching with pagination (axios) and caps (daily: 500, monthly: 1000)
-- Investor relevance filtering (inclusion/exclusion) before scoring
+- EventRegistry fetching with pagination + source URI resolution cache
+- Investor relevance filtering before scoring
 - Political categorization (left/center/right) via static source mapping
-- Synopses generation for general market sentiment and investor climate
+- Synopsis generation for general market sentiment and investor climate
+- Structured text + JSON responses validated via Zod
 - Graceful error handling (McpError) and shutdown (SIGINT)
 
 ## What’s Left To Build / Improve
 
-- README parity:
-  - Document analyze_monthly_headlines (missing)
-  - Reconcile “up to 100 headlines” vs code caps (500/1000)
-- NewsAPI request compliance:
-  - Verify that “sources” is not combined with “country” or “category” in /top-headlines
-  - Adjust params accordingly
-- Testing:
-  - Unit tests for date parsing, filtering, normalization, political mapping
-- Maintainability:
-  - Consider externalizing lexicons and source mapping
-- Performance/Cost:
-  - Optional caching/memoization layer for repeated identical inputs
+- Expand automated test coverage (event resolver mocks, analysis orchestration)
+- Evaluate caching/memoization for repeated inputs
+- Consider persisting token usage to shared store (Redis/Postgres) when multi-instance
+- Explore advanced diagnostics (anomaly detection, trend deltas)
+- Optional: integrate structured logging sink for production observability
 
 ## Known Issues / Risks
 
-- NewsAPI param constraints:
-  - Potential invalid combination: sources + country/category (to be corrected)
-- Source ID vs Name:
-  - Categorization uses normalized article.source.name; ensure consistency vs NewsAPI source IDs
-- Rate limits:
-  - Heavy monthly ranges may approach rate limits; watch pagination caps
-- Headline noise:
-  - Relevance rules may under/over-filter; stats are included to guide tuning
+- EventRegistry pricing/token consumption: large ranges still consume tokens quickly
+- Source URI resolution relies on suggestSourcesFast; handle API hiccups gracefully
+- Relevance lexicon may still over/under-filter edge-case topics
+- Vitest coverage limited; more mocks/fixtures needed
 
 ## Decision Log (Evolution)
 
-- Chosen normalization ranges:
-  - General: [-5, 5] -> [0, 10]
-  - Investor: [-4, 4] -> [0, 10]
-- Conservative fallbacks:
-  - Unmapped sources default to “center”
-- Stateless by design:
-  - No runtime persistence; Memory Bank provides documentation memory
-- Transport:
-  - stdio transport selected for MCP server
+- Migrated from NewsAPI.org to EventRegistry (newsapi.ai) with source resolver caching
+- Adopted MCP SDK 1.20 for structured outputs and streamable HTTP transport
+- Introduced token budgeting diagnostics to respect EventRegistry allowances
+- Standardized synopsis helpers and relevance utilities for reuse
+- Added HTTP deployment path (Railway) with health checks and allowlists
 
 ## Next Actions
 
-1) Fix /top-headlines param composition to comply with NewsAPI rules
-2) Update README:
-   - Add analyze_monthly_headlines usage and response shape
-   - Align documented headline limits with implementation, or adjust implementation
-3) Add tests for:
-   - parseDate logic and exact date acceptance
-   - relevance filtering correctness
-   - normalization clamping and ranges
-   - political mapping outcomes
-4) Evaluate simple caching approach (optional/future)
+1) Backfill targeted unit tests (analysis orchestration, token budgeting edge cases, source resolver)
+2) Evaluate caching/memo strategies for repeated requests
+3) Plan deployment hardening: structured logging sink, rate-limit telemetry dashboards
+4) Explore anomaly detection / trend comparisons for future product milestones
 
 ## References
 
-- Env: NEWS_API_KEY required
+- Env: NEWS_API_KEY, TRANSPORT, HOST, PORT, LOG_LEVEL, NEWS_API_BASE_URL
 - Build: npm run build (outputs to build/index.mjs)
-- Run via MCP client pointing to build/index.mjs
+- Run: npm run start (stdio or HTTP via env)

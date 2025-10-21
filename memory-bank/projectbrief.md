@@ -1,26 +1,27 @@
 # Headline Vibes — Project Brief
 
-Last updated: 2025-08-21
+Last updated: 2025-10-21
 
 ## Summary
 
-Headline Vibes is a Model Context Protocol (MCP) server that analyzes sentiment in news headlines from major US publications. It provides:
+Headline Vibes is a Model Context Protocol (MCP) server that analyzes sentiment in news headlines from major US publications retrieved via EventRegistry (newsapi.ai). It provides:
 - Natural language date parsing ("yesterday", "last Friday", specific YYYY-MM-DD)
 - Daily and monthly analysis modes
 - Dual sentiment: general (lexicon-based) and investor-focused (custom weighted lexicon)
 - Political-leaning breakdown (left/center/right) based on source mapping
 - Relevance filtering for investor-centric headlines
 - Source and category distribution metrics, filtering stats, and sample headlines
+- Structured MCP outputs with token budgeting and sampling diagnostics
 
 Primary entrypoints (MCP tools):
 - analyze_headlines(input: string)
 - analyze_monthly_headlines(startMonth: YYYY-MM, endMonth: YYYY-MM)
 
 Tech stack:
-- Node.js + TypeScript
-- MCP SDK 0.6.0 (stdio transport)
-- NewsAPI (https://newsapi.org)
-- sentiment, axios, chrono-node
+- Node.js + TypeScript (ESM)
+- MCP SDK 1.20 (stdio + streamable HTTP transports)
+- EventRegistry / NewsAPI.ai (https://newsapi.ai)
+- axios, chrono-node, sentiment, zod, pino
 
 ## Goals
 
@@ -53,7 +54,7 @@ Tech stack:
   - Includes filtering stats, headlines analyzed, sources analyzed, source/political distributions, and sample headlines by leaning.
 - For analyze_monthly_headlines:
   - Returns per-month breakdown with political sentiments and headline counts.
-- Robust error handling: invalid params, unparseable dates, NewsAPI failures.
+- Robust error handling: invalid params, unparseable dates, and EventRegistry failures surfaced via MCP errors.
 - Memory Bank stays current and sufficient to fully reconstruct project context.
 
 ## Key Requirements
@@ -67,9 +68,9 @@ Tech stack:
 
 ## Constraints and Dependencies
 
-- NewsAPI rate limits and coverage; queries constrained by source filters and date ranges.
-- Node.js v16+; TypeScript build to build/index.mjs.
-- MCP transport: stdio, must remain responsive and close gracefully on SIGINT.
+- EventRegistry rate limits and token budgeting constraints; queries constrained by curated source lists.
+- Node.js v18+; TypeScript build to build/index.mjs.
+- MCP transports: stdio for local dev, HTTP (Railway) for remote hosting with origin/host allowlists.
 
 ## Risks and Mitigations
 
@@ -94,8 +95,10 @@ Tech stack:
 ## Operational Notes
 
 - Environment:
-  - NEWS_API_KEY must be set in MCP server config/env.
+  - NEWS_API_KEY (EventRegistry) required.
+  - Optional: NEWS_API_BASE_URL, HOST, PORT, LOG_LEVEL, ALLOWED_HOSTS, ALLOWED_ORIGINS.
 - Build/run:
   - npm install; npm run build; run via MCP config pointing to build/index.mjs.
 - MCP integration:
   - Configure under mcpServers in the client, command: node, args: [path/to/build/index.mjs].
+  - Structured responses available via `structuredContent`.

@@ -1,29 +1,27 @@
 # Active Context — Headline Vibes
 
-Last updated: 2025-08-21
+Last updated: 2025-10-21
 
 ## Current Focus
 
-- Initialize the Memory Bank for the Headline Vibes MCP server to ensure stateless continuity across sessions.
-- Document system behavior, APIs, patterns, and constraints comprehensively.
-- Highlight mismatches and potential improvements discovered during review.
+- Finalize EventRegistry migration + MCP SDK 1.20 upgrade.
+- Ensure structured outputs, diagnostics, and documentation stay in sync.
+- Prepare for Railway deployment with HTTP transport and health checks.
 
 ## Recent Changes
 
-- Created Memory Bank directory and core docs:
-  - projectbrief.md
-  - productContext.md
-  - systemPatterns.md
-  - techContext.md
-- Tailored content to current code and README.
+- Upgraded dependencies (MCP SDK 1.20, TypeScript 5.9, Vitest, Zod, Pino).
+- Rebuilt server entrypoint with structuredContent, logging, HTTP allowlists.
+- Added analysis service, relevance helpers, synopsis generators.
+- Integrated EventRegistry client (article/getArticles) with source URI resolution.
+- Added docs/railway.md and refreshed Memory Bank.
 
 ## Next Steps
 
-- Create progress.md to track status, known issues, and upcoming work.
-- (Optional) Add memory-bank/apis/newsapi.md to document endpoints, params, and rate-limit considerations.
-- Align README with current capabilities:
-  - Document analyze_monthly_headlines tool and monthly outputs.
-  - Reconcile stated headline limits (README says 100 vs code caps 500/1000).
+- Expand automated tests (analysis orchestration, source resolver).
+- Evaluate caching strategies for repeated queries.
+- Prepare deployment checklist (Railway env + smoke tests) before go-live.
+- Monitor EventRegistry token usage post-deployment; tune caps if needed.
 
 ## Important Patterns and Preferences
 
@@ -39,33 +37,30 @@ Last updated: 2025-08-21
 ## Active Decisions
 
 - Maintain documentation-only memory (no runtime persistence).
-- Keep political mapping and investor lexicon in code for now; consider externalizing later.
-- Use stdio transport for MCP; graceful shutdown on SIGINT.
+- Keep political mapping + lexicons in code; revisit externalization once stable.
+- Support both stdio (local dev) and HTTP (Railway) transports; HTTP protected by host/origin allowlists.
+- Structured MCP responses use Zod schemas validated server-side.
 
 ## Open Questions / Considerations
 
-1) NewsAPI /top-headlines parameters:
-   - The code currently combines "sources" with "country" and "category". Per NewsAPI docs, "sources" cannot be mixed with "country" or "category". Action: verify and adjust request params to ensure compliance.
-
-2) README parity:
-   - README "Features" mentions up to 100 headlines, but code supports pagination with caps up to 500 (daily) and 1000 (monthly). Action: update README or adjust code to match the documented limit.
-
-3) Source categorization:
-   - Categorization uses article.source.name normalized to kebab-case, while NewsAPI "sources" param uses source IDs. Ensure mapping consistency between IDs and names for categorization.
-
-4) Caching:
-   - Consider lightweight memoization for repeated identical queries to reduce API calls (out of current scope but valuable).
-
-5) Testing:
-   - Add tests for date parsing, filtering accuracy, normalization, and political categorization.
+1) Testing depth:
+   - Need mocked EventRegistry responses for analysis service unit tests.
+2) Token budgeting persistence:
+   - Current implementation is in-memory; multi-instance deployment could double-count.
+3) Source resolver cache:
+   - Consider seeding critical URIs or persisting cache for deterministic coverage.
+4) Observability:
+   - Do we need structured log shipping or metrics for production Railway deployment?
+5) Future toolset:
+   - Should we expose additional tools (historical comparisons, anomaly scans)?
 
 ## Quick Reference (Tools)
 
 - analyze_headlines(input: string)
   - Accepts natural language or YYYY-MM-DD
-  - Returns general/investor scores, synopses, distributions, filtering stats
+  - Returns general/investor scores, synopses, distributions, diagnostics (token & sampling)
 - analyze_monthly_headlines(startMonth: YYYY-MM, endMonth: YYYY-MM)
-  - Returns per-month political sentiments, headline counts, sample headlines
+  - Returns per-month political sentiments, headline counts, diagnostics, and optional error fields
 
 ## Insights & Learnings
 

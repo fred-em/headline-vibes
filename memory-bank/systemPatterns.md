@@ -1,10 +1,10 @@
 # System Patterns — Headline Vibes
 
-Last updated: 2025-08-21
+Last updated: 2025-10-21
 
 ## Overview
 
-Headline Vibes is an MCP (Model Context Protocol) stdio server that fetches major US news headlines and computes:
+Headline Vibes is an MCP (Model Context Protocol) server that fetches major US news headlines from EventRegistry and computes:
 - General sentiment (lexicon-based) normalized to 0–10
 - Investor-specific sentiment (custom weighted lexicon) normalized to 0–10
 - Political leaning breakdown (left/center/right)
@@ -17,33 +17,34 @@ Core tools:
 ## Architecture
 
 - Runtime
-  - Node.js + TypeScript
-  - MCP SDK 0.6.0
-  - Stdio transport
+  - Node.js + TypeScript (ESM)
+  - MCP SDK 1.20
+  - Transports: stdio (default) and streamable HTTP (Railway)
 - External
-  - NewsAPI (REST)
+  - EventRegistry / NewsAPI.ai REST API
 - Key Modules
-  - Server: @modelcontextprotocol/sdk/server
-  - HTTP: axios
+  - Server: @modelcontextprotocol/sdk/server (stdio + streamable HTTP transports)
+  - HTTP client: axios (configured with EventRegistry base URL)
   - NLP: chrono-node (date parsing)
-  - Sentiment: sentiment
+  - Sentiment scoring: sentiment
+  - Analysis orchestration: `services/analysis.ts`
+  - Logging: `src/logger.ts` (pino)
 
 ### Component Relationships
 
 - MCP Server (Server + StdioServerTransport)
   - Registers ListTools and CallTool handlers
   - Delegates to analysis functions
-- NewsAPI Client (axios instance)
-  - Base URL: https://newsapi.org/v2
-  - Default headers include X-Api-Key from env NEWS_API_KEY
+- EventRegistry client (axios instance)
+  - Base URL: configurable via `NEWS_API_BASE_URL` (defaults to https://eventregistry.org/api/v1/)
+  - Authentication: `apiKey` query parameter sourced from `NEWS_API_KEY`
 - Analysis Pipelines
-  - Daily: /top-headlines (with sources + business category)
-  - Monthly: /everything (for date ranges per month)
+  - Daily: EventRegistry `article/getArticles` with dateStart=dateEnd, curated source URIs
+  - Monthly: same endpoint across month ranges (historical queries)
 - Scoring & Filters
-  - Relevance filter: inclusion/exclusion terms for investor focus
-  - General sentiment: sentiment.comparative average
-  - Investor sentiment: weighted term hits
-  - Normalization: map raw averages to 0–10
+  - Relevance filter: inclusion/exclusion terms via `services/relevance.ts`
+  - General sentiment: sentiment.comparative average → normalized [-1,1] to [0,10]
+  - Investor sentiment: weighted lexicon → normalized [-4,4] to [0,10]
 - Categorization
   - Political leaning (left/center/right) by static source mapping
   - Source normalization: lowercase, spaces -> hyphens
@@ -58,9 +59,10 @@ Core tools:
    - Parse date:
      - If YYYY-MM-DD, accept
      - Else chrono-node parse with error if unparseable
+   - Token preflight: `estimateTokensForArticleSearch` + `checkAndRecord`
    - Fetch headlines:
-     - Endpoint: /top-headlines
-     - Params: sources (preferred list), country=us, category=business, from=to=date, language=en, pagination up to cap
+     - Endpoint: EventRegistry `article/getArticles`
+     - Params: dateStart/dateEnd=date, lang=en, sourceUri resolved via SourceResolver, pagination up to pageCap
    - Group by source; compute distribution
    - Relevance filtering:
      - Exclusion terms check first; skip if hit
@@ -68,23 +70,22 @@ Core tools:
    - Balanced sampling:
      - Even-ish distribution: cap per source based on max total
    - Sentiment scoring:
-     - general: sentiment.comparative average
-     - investor: weighted investment lexicon
-     - normalize general: range [-5, 5] -> [0,10]
-     - normalize investor: range [-4, 4] -> [0,10]
+     - general: sentiment.comparative average (normalized)
+     - investor: weighted investment lexicon (normalized)
    - Synopses:
      - General market synopsis with distribution buckets (strong/moderate)
      - Investor synopsis with key term frequency & investment climate thresholds
    - Political categorization:
      - Map source to left/center/right via static list; fallback center
      - Compute per-leaning sentiment & counts
-   - Return structured JSON as text content
+   - Return MCP CallTool result with summary text plus `structuredContent`
 
 3) CallTool: analyze_monthly_headlines
    - Validate month formats (^\d{4}-(?:0[1-9]|1[0-2])$)
    - Expand months range into [start, end] per month
    - For each month:
-     - Fetch via /everything with pagination up to cap (~1000)
+     - Token preflight; skip month if blocked
+     - Fetch via `article/getArticles` across month range with curated sources
      - Categorize articles by political leaning (by source)
      - Compute per-leaning sentiment (general/investor), counts, sample headlines
      - Normalize scores; aggregate into monthly results
@@ -97,26 +98,26 @@ Core tools:
   - Exact match YYYY-MM-DD short-circuit
   - chrono-node parseDate else throw McpError InvalidParams
 - HTTP Pagination
-  - pageSize=100, iterate pages until < pageSize or reach caps
-  - Daily cap: 500; Monthly cap: 1000
+  - pageSize=100, iterate pages until < pageSize or pageCap (env-controlled)
+  - Request counts recorded for budgeting diagnostics
 - Normalization
   - normalized = ((raw - min) / (max - min)) * 10 clamped to [0,10]
   - General range: [-5, 5]; Investor range: [-4, 4]
 - Relevance Filter
-  - exclusion: array of lifestyle/irrelevant terms (case-insensitive includes)
-  - inclusion: dictionary with weights; relevanceScore sum > 0 -> relevant
+  - exclusion terms short-circuit to false relevance
+  - inclusion weights summed (>0) mark relevance; matched terms captured for diagnostics
 - Political Mapping
   - SOURCE_CATEGORIZATION constant: arrays of kebab-case source ids
   - Source id derivation: article.source.name?.toLowerCase().replace(/\s+/g, '-')
   - Fallback to center if unknown
 - Balanced Selection (Daily)
-  - After filtering, select up to maxHeadlines with a per-source cap
-  - maxPerSource = ceil(maxHeadlines / sourcesWithRelevant.length)
+  - After filtering, distribute evenly by per-source quota (floor(max / sourcesWithRelevant))
+  - Maintains cross-outlet parity before scoring
 
 ## Data Shapes
 
-- NewsAPI Article (subset)
-  - { title: string, publishedAt: string, source: { id: string, name: string } }
+- EventRegistry Article (subset)
+  - { id: string | null, sourceName: string, title: string, publishedAt: string, url?: string }
 - Daily Result (simplified)
   - political_sentiments: { left|center|right: { general, investor, headlines } }
   - overall_sentiment: {
@@ -131,18 +132,22 @@ Core tools:
   - sample_headlines_by_leaning: { left|center|right: string[] }
 
 - Monthly Result (simplified)
-  - { [YYYY-MM]: {
-      political_sentiments: { leaning: { general, investor, headlines, sample_headlines } }
-      total_headlines: number
-      date_range: { start: YYYY-MM-DD, end: YYYY-MM-DD }
-      error?: string
-    } }
+  - months: {
+      [YYYY-MM]: {
+        date_range: { start, end },
+        total_headlines,
+        political_sentiments: { leaning: { general, investor, headlines, sample_headlines } },
+        diagnostics: { token_budget, sampling },
+        error?: string
+      }
+    }
 
 ## Error Handling
 
 - Uses McpError with ErrorCode for client-friendly messages:
   - InvalidParams: missing/invalid inputs, unparseable dates
-  - InternalError: NewsAPI or unexpected errors
+  - ResourceExhausted: token budget or rate-limit exhaustion
+  - InternalError: EventRegistry or unexpected errors
 - Server-level:
   - this.server.onerror logs MCP errors
   - SIGINT handler closes server gracefully
@@ -152,32 +157,32 @@ Core tools:
 ## Limits, Defaults, Constants
 
 - pageSize: 100
-- Daily maxHeadlines: 500
-- Monthly maxHeadlines: 1000
-- Preferred sources: curated cross-spectrum US list (kebab-case joined by comma)
+- pageCap defaults: `BACKFILL_PAGE_CAP_PER_DAY` env (default 2)
+- Preferred sources: curated cross-spectrum US outlets (`constants/sources.ts`)
 - Language: en
-- Category (daily): business
+- Token budget defaults: monthly 50k tokens, soft cap 80%, hard cap 95% (configurable)
 
 ## Logging
 
-- Console.error for server start status, failures, and per-month errors
-- Avoids verbose per-article logging to keep stdio clean
+- Pino logger (`src/logger.ts`) with configurable `LOG_LEVEL`
+- Structured logs for startup, errors, and HTTP transport issues
 
 ## Extensibility Patterns
 
 - Adding tools:
-  - Extend ListTools and switch in CallTool handler
-  - Keep input schemas explicit and validated
+  - Extend ListTools metadata and output schemas (Zod + zod-to-json-schema)
+  - Delegate heavy lifting to services; keep handlers thin
 - Caching (future):
-  - Introduce a memoization layer keyed by input parameters
-  - Persist to file/db while respecting rate limits and invalidation policies
+  - Introduce memoization keyed by date/month ranges
+  - Persist results alongside token usage to avoid double counting
 - Lexicon tuning:
-  - Externalize INVESTOR_LEXICON and relevance lists to config for runtime updates
-- Source mapping maintenance:
-  - Move SOURCE_CATEGORIZATION to a separate config with tests
+  - Modify `constants/relevance.ts` and scoring heuristics independently
+- Observability:
+  - Expand diagnostics payloads or integrate structured logging targets
 
 ## Security and Config
 
-- Requires NEWS_API_KEY env var
+- Requires NEWS_API_KEY (EventRegistry) env var
+- Optional: NEWS_API_BASE_URL, HOST, PORT, LOG_LEVEL, ALLOWED_HOSTS, ALLOWED_ORIGINS
 - No runtime persistence (documentation-only memory via Markdown)
-- Network calls restricted to NewsAPI endpoints configured in code
+- Network calls restricted to EventRegistry endpoints configured in code

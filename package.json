@@ -20,19 +20,26 @@
     "build": "tsc --pretty && chmod +x build/index.mjs",
     "prepare": "npm run build",
     "watch": "tsc --watch",
+    "start": "node ./build/index.mjs",
     "start:stdio": "TRANSPORT=stdio node ./build/index.mjs",
-    "start:http": "TRANSPORT=http node ./build/index.mjs"
+    "start:http": "TRANSPORT=http node ./build/index.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.17.3",
+    "@modelcontextprotocol/sdk": "^1.20.1",
     "axios": "^1.7.9",
     "chrono-node": "^2.7.8",
-    "sentiment": "^5.0.2"
+    "dotenv": "^17.2.1",
+    "pino": "^10.1.0",
+    "sentiment": "^5.0.2",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
   },
   "devDependencies": {
     "@types/axios": "^0.14.0",
-    "@types/node": "^20.11.24",
+    "@types/node": "^24.9.1",
     "@types/sentiment": "^5.0.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }

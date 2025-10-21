@@ -2,38 +2,47 @@ import axios from 'axios';
 import { getConfig } from '../config.js';
 import type { Article } from '../types.js';
 import { normalizeDate } from '../utils/date.js';
+import { resolveSourceUris } from './sourceResolver.js';
 
 /**
- * Raw types matching NewsAPI responses
+ * Raw types matching Event Registry API responses
  */
-type RawSource = { id: string | null; name: string };
+type RawSource = { uri: string; title: string };
 type RawArticle = {
-  source: RawSource;
+  uri: string;
   title: string;
-  publishedAt: string;
+  dateTime: string;
   url?: string;
+  source: RawSource;
 };
 type RawResponse = {
-  status: 'ok' | 'error';
-  totalResults: number;
-  articles: RawArticle[];
+  articles?: {
+    results: RawArticle[];
+    totalResults: number;
+    pages: number;
+    page: number;
+  };
 };
 
 /**
  * Options for pagination and filtering
  */
 export interface FetchOptions {
-  sources?: string[]; // list of source ids
-  pageCap?: number; // max number of pages to fetch (pageSize=100)
-  language?: string; // defaults to 'en'
+  sources?: string[]; // list of source names or URIs
+  pageCap?: number; // max number of pages to fetch
+  language?: string; // defaults to 'eng'
 }
 
 /**
- * NewsApiClient encapsulates compliant request construction and pagination.
- * Compliance: when 'sources' is provided, do NOT include 'country' or 'category'.
- * - For present-day requests, prefers /top-headlines with sources-only.
- * - For historical day/range, uses /everything with 'from' and 'to' bounds.
+ * NewsApiClient for Event Registry API (newsapi.ai)
+ * Uses the Event Registry REST API endpoints with proper authentication
  */
+export interface FetchResult {
+  articles: Article[];
+  requestCount: number;
+  pagesFetched: number;
+}
+
 export class NewsApiClient {
   private axios: ReturnType<typeof axios.create>;
   private readonly pageSize = 100;
@@ -42,115 +51,115 @@ export class NewsApiClient {
     if (!apiKey) {
       throw new Error('NEWS_API_KEY is required to initialize NewsApiClient');
     }
+    const cfg = getConfig();
     this.axios = axios.create({
-      baseURL: 'https://newsapi.org/v2',
-      headers: {
-        'X-Api-Key': apiKey,
-      },
+      baseURL: cfg.newsApiBaseUrl,
       timeout: 30000,
     });
   }
 
   /**
    * Fetch top headlines for a specific date.
-   * - If the date is today (UTC), uses /top-headlines (sources-only, no country/category).
-   * - Otherwise, uses /everything with from=to=date for historical fetch.
+   * Uses Event Registry's article search endpoint
    */
-  async fetchTopHeadlinesByDate(date: string, opts: FetchOptions = {}): Promise<Article[]> {
+  async fetchTopHeadlinesByDate(date: string, opts: FetchOptions = {}): Promise<FetchResult> {
     const normalized = normalizeDate(date);
-    const todayUTC = normalizeDate(new Date());
-
-    const useTopHeadlines = normalized === todayUTC;
-
-    if (useTopHeadlines) {
-      return this.fetchTopHeadlinesRecent(opts);
-    } else {
-      // Fall back to historical day query via /everything
-      return this.fetchEverythingRange(normalized, normalized, opts);
-    }
+    return this.fetchArticlesByDate(normalized, normalized, opts);
   }
 
   /**
    * Historical/monthly fetching with explicit range [start, end] (inclusive).
-   * Uses /everything with sources-only for compliance.
+   * Uses Event Registry's article search with date range
    */
-  async fetchEverythingRange(start: string, end: string, opts: FetchOptions = {}): Promise<Article[]> {
-    const sourcesCsv = (opts.sources ?? []).join(',') || undefined;
-    const language = opts.language ?? 'en';
+  async fetchEverythingRange(start: string, end: string, opts: FetchOptions = {}): Promise<FetchResult> {
+    return this.fetchArticlesByDate(start, end, opts);
+  }
+
+  /**
+   * Core method to fetch articles by date range using Event Registry API
+   */
+  private async fetchArticlesByDate(startDate: string, endDate: string, opts: FetchOptions = {}): Promise<FetchResult> {
+    const language = opts.language ?? 'eng';
     const pageCap = Math.max(1, opts.pageCap ?? 10);
     const results: Article[] = [];
-
-    let page = 1;
-    while (page <= pageCap) {
-      const { data } = await this.axios.get<RawResponse>('/everything', {
-        params: {
-          sources: sourcesCsv, // when present, do not mix country/category
-          from: start,
-          to: end,
-          language,
-          pageSize: this.pageSize,
-          page,
-          sortBy: 'publishedAt',
-        },
-      });
-
-      if (data.status !== 'ok') break;
-
-      const mapped = data.articles.map(this.mapArticle);
-      results.push(...mapped);
-
-      if (data.articles.length < this.pageSize) break;
-      page++;
+    // Resolve curated source names to Event Registry URIs once per request
+    let sourceUris: string[] | undefined;
+    if (opts.sources && opts.sources.length > 0) {
+      try {
+        // Temporary safety cap to limit suggestSourcesFast calls during initial runs
+        sourceUris = await resolveSourceUris(opts.sources.slice(0, 10));
+      } catch (e: any) {
+        console.error('[NewsApiClient] source resolve failed:', e?.message ?? String(e));
+      }
     }
 
-    return results;
+    let page = 1;
+    let pagesFetched = 0;
+    while (page <= pageCap) {
+      try {
+        const body: any = {
+          resultType: 'articles',
+          dateStart: startDate,
+          dateEnd: endDate,
+          lang: language,
+          articlesPage: page,
+          articlesCount: this.pageSize,
+          articlesSortBy: 'date',
+          articleBodyLen: 0, // Don't need full body
+        };
+        const query = { apiKey: this.apiKey };
+
+        // Add source filtering if provided (resolved to canonical URIs)
+        if (sourceUris && sourceUris.length > 0) {
+          body.sourceUri = sourceUris;
+        }
+
+        // Build request with safe logging (do not log apiKey)
+        const reqPath = 'article/getArticles';
+        try {
+          const preview = { ...body, sourceUri: Array.isArray(body.sourceUri) ? `uris:${body.sourceUri.length}` : undefined };
+          console.log(`[NewsApiClient] POST ${this.axios.defaults.baseURL}${reqPath} body=${JSON.stringify(preview)}`);
+        } catch {}
+        const { data } = await this.axios.post<RawResponse>(reqPath, body, { params: query });
+
+        if (!data.articles || !data.articles.results) break;
+
+        const mapped = data.articles.results.map(this.mapArticle);
+        results.push(...mapped);
+        pagesFetched++;
+
+        if (data.articles.results.length < this.pageSize || page >= data.articles.pages) break;
+        page++;
+      } catch (error: any) {
+        const status = error?.response?.status;
+        const statusText = error?.response?.statusText;
+        console.error(`[NewsApiClient] Error page ${page}: status=${status ?? 'n/a'} ${statusText ?? ''} message=${error?.message ?? String(error)}`);
+        const body = error?.response?.data;
+        if (body) {
+          try {
+            console.error('[NewsApiClient] Response body snippet:', JSON.stringify(body).slice(0, 500));
+          } catch {}
+        }
+        break;
+      }
+    }
+
+    return {
+      articles: results,
+      requestCount: pagesFetched,
+      pagesFetched,
+    };
   }
 
   /**
-   * Helper to fetch most recent top headlines (today) via /top-headlines.
-   * Compliance: sources-only if provided; no country/category when sources are set.
-   */
-  private async fetchTopHeadlinesRecent(opts: FetchOptions = {}): Promise<Article[]> {
-    const sourcesCsv = (opts.sources ?? []).join(',') || undefined;
-    const language = opts.language ?? 'en';
-    const pageCap = Math.max(1, opts.pageCap ?? 3);
-
-    const results: Article[] = [];
-    let page = 1;
-
-    while (page <= pageCap) {
-      const { data } = await this.axios.get<RawResponse>('/top-headlines', {
-        params: {
-          // When sources is provided, omit country/category to comply with NewsAPI rules.
-          sources: sourcesCsv,
-          language,
-          pageSize: this.pageSize,
-          page,
-        },
-      });
-
-      if (data.status !== 'ok') break;
-
-      const mapped = data.articles.map(this.mapArticle);
-      results.push(...mapped);
-
-      if (data.articles.length < this.pageSize) break;
-      page++;
-    }
-
-    return results;
-  }
-
-  /**
-   * Map NewsAPI RawArticle to our internal Article shape.
-   * We keep the raw source.id (nullable) and source name; date remains ISO-8601 string.
+   * Map Event Registry RawArticle to our internal Article shape.
    */
   private mapArticle(raw: RawArticle): Article {
     return {
-      id: raw.source?.id ?? null,
-      sourceName: raw.source?.name ?? 'Unknown',
+      id: raw.source?.uri ?? null,
+      sourceName: raw.source?.title ?? 'Unknown',
       title: raw.title,
-      publishedAt: raw.publishedAt,
+      publishedAt: raw.dateTime,
       url: raw.url,
     };
   }
