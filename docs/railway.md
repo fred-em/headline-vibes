@@ -30,7 +30,8 @@ Last updated: 2025-10-21
    ```bash
    npm run start
    ```
-   Transport is controlled via env (`TRANSPORT=http`).
+   Transport is controlled via env (`TRANSPORT=http`).  
+   `Railpack` auto-detects the root `index.js` shim, which simply imports `./build/index.mjs`; keep the build artifact available by running `npm run build` during deployment.
 
 3. **Health Check**
    - Endpoint: `GET /healthz`

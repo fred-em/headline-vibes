@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "MCP server for analyzing sentiment of news headlines",
   "type": "module",
+  "main": "./build/index.mjs",
   "bin": {
     "headline-vibes": "./build/index.mjs"
   },
