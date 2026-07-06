@@ -68,7 +68,7 @@ JSON schemas powering structured results live in `src/schemas/headlines.ts`.
 3. Start with `npm run start`.
 4. Health probe: `GET /healthz` returns `200 ok`.
 
-See `docs/railway.md` for the full playbook.
+See `docs/railway.md` for the full playbook and `docs/claude-desktop.md` for Claude Desktop integration steps.
 
 ## License
 
